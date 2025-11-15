@@ -12,7 +12,6 @@ from PIL import Image
 
 
 class StringLineCounter:
-    """Custom node for counting the number of lines in a string."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -37,7 +36,6 @@ class StringLineCounter:
 
 
 class MechBabyAudioCollector:
-    """Custom node for collecting and saving IndexTTS audio as needed."""
 
     def __init__(self):
         self._display_entries: List[str] = []
@@ -118,7 +116,6 @@ class MechBabyAudioCollector:
 
 
 class SimpAiMetadataReader:
-    """Custom node for reading embedded JSON metadata from SimpAi images."""
 
     _FIELD_SCHEMAS = [
         {
@@ -469,7 +466,6 @@ class SimpAiMetadataReader:
 
     @staticmethod
     def _extract_json_from_image(img: Image.Image):
-        # First search in EXIF
         exif = img.getexif()
         if exif:
             for tag_id, raw_value in exif.items():
@@ -484,7 +480,6 @@ class SimpAiMetadataReader:
                     if parsed is not None:
                         return parsed
 
-        # Then check info field
         for value in img.info.values():
             if isinstance(value, bytes):
                 try:
@@ -509,10 +504,8 @@ class SimpAiMetadataReader:
 
 
 class StringListMerger:
-    """Custom node that merges items selected from two text lists."""
 
     def __init__(self):
-        # Track selection state for input2 (list2)
         self._list2_selected_indices = set()
         self._list2_selection_mode = None
 
@@ -535,34 +528,22 @@ class StringListMerger:
     CATEGORY = "MechBabyUtils/Text"
 
     def merge(self, list1, list2, list2_selection_mode: str, supplement_text: str = ""):
-        # Normalize input1: convert to string format
         list1_str = self._normalize_input(list1)
-        
-        # Normalize input2: convert to string format
         list2_str = self._normalize_input(list2)
         
-        # Parse input1 list (remove blank lines)
         list1_items = [line.strip() for line in list1_str.strip().split("\n") if line.strip()]
-        
-        # Parse input2 list (automatically remove blank lines)
         list2_items = [line.strip() for line in list2_str.strip().split("\n") if line.strip()]
         
-        # If list1 is empty, return empty string
         if not list1_items:
             return ("",)
         
-        # Reset selection mode: reset input2 selection state on each execution
-        # Use local variable to manage state, ensuring each execution is independent
         selected_indices = set()
         self._list2_selection_mode = list2_selection_mode
         
-        # Process result list
         result_list = []
         used_supplement_count = 0
         
-        # If random mode, shuffle available indices first
         if list2_items and list2_selection_mode == "随机":
-            # Use current time seconds + milliseconds as random seed
             current_time = time.time()
             seconds = int(current_time)
             milliseconds = int((current_time - seconds) * 1000)
@@ -575,23 +556,17 @@ class StringListMerger:
             random_indices_list = None
             random_index_ptr = None
         
-        # Iterate through all rows of input1 (in order, no looping)
         for idx1, item1 in enumerate(list1_items):
-            # Select from input2
             selected_item2 = ""
             use_supplement = False
             
             if list2_items:
-                # Get all unselected indices from input2
                 available_indices = [i for i in range(len(list2_items)) if i not in selected_indices]
                 
                 if available_indices:
-                    # There are still unselected items
                     if list2_selection_mode == "顺序":
-                        # Sequential selection: select minimum index (top to bottom)
                         selected_index2 = min(available_indices)
                     else:
-                        # Random selection: select from pre-generated shuffled list
                         while random_index_ptr < len(random_indices_list):
                             candidate_index = random_indices_list[random_index_ptr]
                             if candidate_index in available_indices:
@@ -600,37 +575,29 @@ class StringListMerger:
                                 break
                             random_index_ptr += 1
                         else:
-                            # If random list is exhausted, fall back to standard random selection
                             seed_value = int(time.time() * 1000) + idx1 + os.getpid()
                             local_random = random.Random(seed_value)
                             selected_index2 = local_random.choice(available_indices)
                     
-                    # Mark as selected (using local variable)
                     selected_indices.add(selected_index2)
                     selected_item2 = list2_items[selected_index2]
                 else:
-                    # All items in input2 have been selected, check if supplement text is needed
-                    # Only use supplement text when input2 list items are fewer than input1
                     if len(list2_items) < len(list1_items) and supplement_text:
                         use_supplement = True
                         used_supplement_count += 1
                         selected_item2 = supplement_text.strip()
             else:
-                # Input2 is empty, use supplement text if provided
                 if supplement_text:
                     selected_item2 = supplement_text.strip()
             
-            # Merge the two selected items
             if selected_item2 is None:
                 selected_item2 = ""
             
             merged = f"{item1}{selected_item2}"
             result_list.append(merged)
         
-        # Join all results with newlines, return string list
         merged_text_list = "\n".join(result_list)
         
-        # Build display info
         display_info = []
         display_info.append(f"输入1: 共 {len(list1_items)} 项（已全部处理）")
         
@@ -651,67 +618,43 @@ class StringListMerger:
         
         display_info.append(f"输出: {len(result_list)} 个组合结果")
         
-        # Update instance variable for potential future queries
         self._list2_selected_indices = selected_indices
         
         return {"ui": {"text": display_info}, "result": (merged_text_list,)}
     
     @staticmethod
     def _normalize_input(input_value):
-        """
-        Normalize input value, supporting multiple input formats (string, list, tuple, None, etc.)
-        Convert uniformly to "one item per line" string format (separated by newlines)
-        """
-        # Handle None
         if input_value is None:
             return ""
         
-        # Handle list or tuple types (prioritized, as they may come from external nodes like Switch(any))
         if isinstance(input_value, (list, tuple)):
-            # If empty list/tuple
             if len(input_value) == 0:
                 return ""
             
-            # If single-element tuple or list
             if len(input_value) == 1:
                 single_item = input_value[0]
-                # If single element is a string, check if it already contains newlines
                 if isinstance(single_item, str):
-                    # If string contains newlines, it's already in multi-line format, return directly
                     if "\n" in single_item:
                         return single_item
-                    # Otherwise it's just a single-line string, return directly
                     return single_item
-                # If single element is not a string, convert to string
                 return str(single_item)
             
-            # Multi-element list/tuple: convert each element to string, join with newlines
-            # This ensures each element occupies one line, regardless of element type
             normalized_items = []
             for item in input_value:
                 if item is not None:
-                    # If element is a string and contains newlines, split first then add
                     if isinstance(item, str) and "\n" in item:
-                        # If element itself is a multi-line string, split and add line by line
                         normalized_items.extend(item.strip().split("\n"))
                     else:
-                        # Otherwise convert to string directly and add
                         normalized_items.append(str(item).strip())
             return "\n".join(normalized_items)
         
-        # Handle string type
         if isinstance(input_value, str):
-            # String may already contain newlines (from text box), return directly
             return input_value
         
-        # Other types: convert to string
         return str(input_value) if input_value is not None else ""
 
 
 class StringToStringList:
-    """Convert a string to a list of strings by splitting with a delimiter (inverse operation of StringListToString).
-    Output is a list format that triggers multiple executions, similar to Switch(Any) output.
-    """
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -731,42 +674,24 @@ class StringToStringList:
     CATEGORY = "MechBabyUtils/Text"
 
     def split(self, text: str, delimiter: str, remove_empty: bool, strip_items: bool):
-        """
-        Split a string into a list of strings using a delimiter.
-        
-        Args:
-            text: Input string
-            delimiter: Delimiter string ("\\n" will be converted to actual newline character)
-            remove_empty: Whether to remove empty items
-            strip_items: Whether to strip whitespace from each item
-        
-        Returns:
-            List of strings (list format, downstream nodes will execute once for each string)
-        """
         if not text:
             return ([],)
         
-        # Convert \\n to actual newline character
         if delimiter == "\\n":
             delimiter = "\n"
         
-        # Split string by delimiter
         items = text.split(delimiter)
         
-        # Process each item
         processed_items = []
         for item in items:
-            # Strip whitespace if needed
             if strip_items:
                 item = item.strip()
             
-            # Skip empty strings if needed
             if remove_empty and not item:
                 continue
             
             processed_items.append(item)
         
-        # Return list of strings (list format, downstream nodes will execute once for each string)
         return (processed_items,)
 
 
@@ -785,4 +710,3 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StringListMerger": "文本列表合并器",
     "StringToStringList": "字符串转字符串列表",
 }
-
