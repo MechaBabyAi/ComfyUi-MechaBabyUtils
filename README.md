@@ -30,6 +30,46 @@ MechaBaby 的 ComfyUI 自定义节点集合。包含以下实用节点：
 
 将项目放入 `ComfyUI/custom_nodes/` 目录，重启 ComfyUI 即可加载节点。
 
+### 安装方法
+
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/MechaBabyAi/ComfyUi-MechaBabyUtils.git
+```
+
+然后重启 ComfyUI 即可。
+
+## 使用示例
+
+### StringListMerger 使用示例
+
+**输入1（文本框）**：
+```
+提示词1
+提示词2
+提示词3
+```
+
+**输入2（文本框）**：
+```
+风格A
+风格B
+```
+
+**顺序模式输出**：
+```
+提示词1风格A
+提示词2风格B
+提示词3[补充文本]
+```
+
+**随机模式输出**：
+```
+提示词1风格B
+提示词2风格A
+提示词3[补充文本]
+```
+
 ## 许可证
 
 本项目基于 MIT License 发布。
