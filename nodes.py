@@ -1,5 +1,7 @@
 import json
 import os
+import random
+import time
 from datetime import datetime
 from typing import List
 
@@ -506,15 +508,217 @@ class SimpAiMetadataReader:
             return None
 
 
+class StringListMerger:
+    """将两个文本列表中选出的项进行合并的自定义节点。"""
+
+    def __init__(self):
+        # 跟踪输入2（list2）的选择状态
+        self._list2_selected_indices = set()
+        self._list2_selection_mode = None
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "list1": ("STRING", {"default": "", "multiline": True, "placeholder": "输入1：文本列表（按顺序选择），每行一项"}),
+                "list2": ("STRING", {"default": "", "multiline": True, "placeholder": "输入2：文本列表（可顺序或随机），每行一项，自动去除空白行"}),
+                "list2_selection_mode": (["顺序", "随机"], {"default": "随机"}),
+            },
+            "optional": {
+                "supplement_text": ("STRING", {"default": "", "multiline": True, "placeholder": "输入2不足时的补充文本（可选）"}),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("merged_text_list",)
+    FUNCTION = "merge"
+    CATEGORY = "MechBabyUtils/Text"
+
+    def merge(self, list1, list2, list2_selection_mode: str, supplement_text: str = ""):
+        # 处理输入1：标准化为字符串格式
+        list1_str = self._normalize_input(list1)
+        
+        # 处理输入2：标准化为字符串格式
+        list2_str = self._normalize_input(list2)
+        
+        # 解析输入1列表（去除空白行）
+        list1_items = [line.strip() for line in list1_str.strip().split("\n") if line.strip()]
+        
+        # 解析输入2列表（自动去除空白行）
+        list2_items = [line.strip() for line in list2_str.strip().split("\n") if line.strip()]
+        
+        # 如果列表1为空，返回空字符串
+        if not list1_items:
+            return ("",)
+        
+        # 固定为"重置选择模式"：每次执行都重置输入2的选择状态
+        # 使用局部变量管理状态，确保每次执行都独立
+        selected_indices = set()
+        self._list2_selection_mode = list2_selection_mode
+        
+        # 处理结果列表
+        result_list = []
+        used_supplement_count = 0
+        
+        # 如果是随机模式，先对可用索引进行随机打乱
+        if list2_items and list2_selection_mode == "随机":
+            # 使用当前时间的秒数+毫秒数作为随机种子
+            current_time = time.time()
+            seconds = int(current_time)
+            milliseconds = int((current_time - seconds) * 1000)
+            shuffle_seed = seconds * 1000 + milliseconds + os.getpid() + hash(tuple(list1_items))
+            random_indices_list = list(range(len(list2_items)))
+            shuffle_random = random.Random(shuffle_seed)
+            shuffle_random.shuffle(random_indices_list)
+            random_index_ptr = 0
+        else:
+            random_indices_list = None
+            random_index_ptr = None
+        
+        # 遍历输入1的所有行（按顺序，不循环）
+        for idx1, item1 in enumerate(list1_items):
+            # 从输入2选择
+            selected_item2 = ""
+            use_supplement = False
+            
+            if list2_items:
+                # 获取输入2中所有未选择的索引
+                available_indices = [i for i in range(len(list2_items)) if i not in selected_indices]
+                
+                if available_indices:
+                    # 还有未选择的项
+                    if list2_selection_mode == "顺序":
+                        # 顺序选择：选择最小的索引（从上到下）
+                        selected_index2 = min(available_indices)
+                    else:
+                        # 随机选择：从预先生成的随机打乱列表中选择
+                        while random_index_ptr < len(random_indices_list):
+                            candidate_index = random_indices_list[random_index_ptr]
+                            if candidate_index in available_indices:
+                                selected_index2 = candidate_index
+                                random_index_ptr += 1
+                                break
+                            random_index_ptr += 1
+                        else:
+                            # 如果随机列表用完了，回退到标准随机选择
+                            seed_value = int(time.time() * 1000) + idx1 + os.getpid()
+                            local_random = random.Random(seed_value)
+                            selected_index2 = local_random.choice(available_indices)
+                    
+                    # 标记为已选择（使用局部变量）
+                    selected_indices.add(selected_index2)
+                    selected_item2 = list2_items[selected_index2]
+                else:
+                    # 输入2所有项都已选择过，检查是否需要使用补充文本
+                    # 只有当输入2列表项小于输入1时才使用补充文本
+                    if len(list2_items) < len(list1_items) and supplement_text:
+                        use_supplement = True
+                        used_supplement_count += 1
+                        selected_item2 = supplement_text.strip()
+            else:
+                # 输入2为空，如果提供了补充文本则使用
+                if supplement_text:
+                    selected_item2 = supplement_text.strip()
+            
+            # 合并两个选中的项
+            if selected_item2 is None:
+                selected_item2 = ""
+            
+            merged = f"{item1}{selected_item2}"
+            result_list.append(merged)
+        
+        # 将所有结果用换行符连接，返回字符串列表
+        merged_text_list = "\n".join(result_list)
+        
+        # 构建显示信息
+        display_info = []
+        display_info.append(f"输入1: 共 {len(list1_items)} 项（已全部处理）")
+        
+        if list2_items:
+            selected_count = len(selected_indices)
+            display_info.append(f"输入2: 已选择 {selected_count}/{len(list2_items)} 项（{list2_selection_mode}）")
+            
+            if used_supplement_count > 0:
+                display_info.append(f"使用补充文本: {used_supplement_count} 次")
+            
+            if selected_indices and len(selected_indices) > 0:
+                display_info.append(f"已选择索引: {sorted(selected_indices)}")
+        else:
+            if used_supplement_count > 0:
+                display_info.append(f"使用补充文本: {used_supplement_count} 次")
+            else:
+                display_info.append(f"输入2: 列表为空")
+        
+        display_info.append(f"输出: {len(result_list)} 个组合结果")
+        
+        # 更新实例变量用于后续可能的查询
+        self._list2_selected_indices = selected_indices
+        
+        return {"ui": {"text": display_info}, "result": (merged_text_list,)}
+    
+    @staticmethod
+    def _normalize_input(input_value):
+        """
+        标准化输入值，支持多种输入格式（字符串、列表、元组、None等）
+        统一转换为"一行一个"的字符串格式（用换行符分隔）
+        """
+        # 处理 None
+        if input_value is None:
+            return ""
+        
+        # 处理列表或元组类型（优先处理，因为可能来自外部节点如Switch(any)）
+        if isinstance(input_value, (list, tuple)):
+            # 如果是空列表/元组
+            if len(input_value) == 0:
+                return ""
+            
+            # 如果是单元素元组或列表
+            if len(input_value) == 1:
+                single_item = input_value[0]
+                # 如果单个元素是字符串，需要检查是否已经包含换行符
+                if isinstance(single_item, str):
+                    # 如果字符串包含换行符，说明已经是多行格式，直接返回
+                    if "\n" in single_item:
+                        return single_item
+                    # 否则只是一个单行字符串，直接返回
+                    return single_item
+                # 如果单个元素不是字符串，转换为字符串
+                return str(single_item)
+            
+            # 多元素列表/元组：将每个元素转换为字符串，用换行符连接
+            # 这样确保每个元素占一行，不管元素本身是什么类型
+            normalized_items = []
+            for item in input_value:
+                if item is not None:
+                    # 如果元素是字符串且包含换行符，先分割再添加
+                    if isinstance(item, str) and "\n" in item:
+                        # 如果元素本身是多行字符串，分割后逐行添加
+                        normalized_items.extend(item.strip().split("\n"))
+                    else:
+                        # 否则直接转换为字符串并添加
+                        normalized_items.append(str(item).strip())
+            return "\n".join(normalized_items)
+        
+        # 处理字符串类型
+        if isinstance(input_value, str):
+            # 字符串可能已经包含换行符（来自文本框），直接返回
+            return input_value
+        
+        # 其他类型：转换为字符串
+        return str(input_value) if input_value is not None else ""
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "MechBabyAudioCollector": MechBabyAudioCollector,
     "SimpAiMetadataReader": SimpAiMetadataReader,
+    "StringListMerger": StringListMerger,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "StringLineCounter": "字符串行数统计",
     "MechBabyAudioCollector": "IndexTTS 音频收集器",
     "SimpAiMetadataReader": "SimpAi 元数据读取",
+    "StringListMerger": "文本列表合并器",
 }
 

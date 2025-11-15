@@ -4,9 +4,27 @@ ComfyUI custom nodes collection by MechaBaby - A set of utility nodes for ComfyU
 
 MechaBaby 的 ComfyUI 自定义节点集合。包含以下实用节点：
 
-- `StringLineCounter`：统计输入字符串的行数。
-- `MechBabyAudioCollector`：采集并保存 IndexTTS 音频。
-- `SimpAiMetadataReader`：读取 SimpAi 图片内嵌的 JSON 元数据。
+## 节点列表
+
+### 文本处理节点 (MechBabyUtils/Text)
+
+- **StringLineCounter（字符串行数统计）**：统计输入字符串的行数。
+
+- **StringListMerger（文本列表合并器）**：将两个文本列表中的项进行合并。
+  - 输入1：文本列表（按顺序从上到下选择），每行一项
+  - 输入2：文本列表（可顺序或随机选择），每行一项，自动去除空白行
+  - 选择模式：顺序选择或随机选择（不重复）
+  - 补充文本：当输入2列表项数量小于输入1时，可使用补充文本
+  - 输出：所有组合结果，每行一个（输入1项+输入2项的组合）
+  - 支持多种输入格式：字符串、列表、元组等
+
+### 音频处理节点 (MechBabyUtils/Audio)
+
+- **MechBabyAudioCollector（IndexTTS 音频收集器）**：采集并保存 IndexTTS 音频。
+
+### 图像处理节点 (MechBabyUtils/Image)
+
+- **SimpAiMetadataReader（SimpAi 元数据读取）**：读取 SimpAi 图片内嵌的 JSON 元数据。
 
 ## 安装
 
