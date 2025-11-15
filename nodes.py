@@ -12,7 +12,7 @@ from PIL import Image
 
 
 class StringLineCounter:
-    """统计字符串行数的自定义节点。"""
+    """Custom node for counting the number of lines in a string."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -37,7 +37,7 @@ class StringLineCounter:
 
 
 class MechBabyAudioCollector:
-    """收集 IndexTTS 音频并按需保存的自定义节点。"""
+    """Custom node for collecting and saving IndexTTS audio as needed."""
 
     def __init__(self):
         self._display_entries: List[str] = []
@@ -118,7 +118,7 @@ class MechBabyAudioCollector:
 
 
 class SimpAiMetadataReader:
-    """读取 SimpAi 图片内嵌 JSON 元数据的自定义节点。"""
+    """Custom node for reading embedded JSON metadata from SimpAi images."""
 
     _FIELD_SCHEMAS = [
         {
@@ -464,12 +464,12 @@ class SimpAiMetadataReader:
         with Image.open(image_path) as img:
             json_candidate = SimpAiMetadataReader._extract_json_from_image(img)
         if json_candidate is None:
-            raise RuntimeError("未在图片元数据中找到 SimpAi JSON 信息")
+            raise RuntimeError("SimpAi JSON information not found in image metadata")
         return json_candidate
 
     @staticmethod
     def _extract_json_from_image(img: Image.Image):
-        # 优先在 EXIF 中查找
+        # First search in EXIF
         exif = img.getexif()
         if exif:
             for tag_id, raw_value in exif.items():
@@ -484,7 +484,7 @@ class SimpAiMetadataReader:
                     if parsed is not None:
                         return parsed
 
-        # 其次检查 info 字段
+        # Then check info field
         for value in img.info.values():
             if isinstance(value, bytes):
                 try:
@@ -509,10 +509,10 @@ class SimpAiMetadataReader:
 
 
 class StringListMerger:
-    """将两个文本列表中选出的项进行合并的自定义节点。"""
+    """Custom node that merges items selected from two text lists."""
 
     def __init__(self):
-        # 跟踪输入2（list2）的选择状态
+        # Track selection state for input2 (list2)
         self._list2_selected_indices = set()
         self._list2_selection_mode = None
 
@@ -535,34 +535,34 @@ class StringListMerger:
     CATEGORY = "MechBabyUtils/Text"
 
     def merge(self, list1, list2, list2_selection_mode: str, supplement_text: str = ""):
-        # 处理输入1：标准化为字符串格式
+        # Normalize input1: convert to string format
         list1_str = self._normalize_input(list1)
         
-        # 处理输入2：标准化为字符串格式
+        # Normalize input2: convert to string format
         list2_str = self._normalize_input(list2)
         
-        # 解析输入1列表（去除空白行）
+        # Parse input1 list (remove blank lines)
         list1_items = [line.strip() for line in list1_str.strip().split("\n") if line.strip()]
         
-        # 解析输入2列表（自动去除空白行）
+        # Parse input2 list (automatically remove blank lines)
         list2_items = [line.strip() for line in list2_str.strip().split("\n") if line.strip()]
         
-        # 如果列表1为空，返回空字符串
+        # If list1 is empty, return empty string
         if not list1_items:
             return ("",)
         
-        # 固定为"重置选择模式"：每次执行都重置输入2的选择状态
-        # 使用局部变量管理状态，确保每次执行都独立
+        # Reset selection mode: reset input2 selection state on each execution
+        # Use local variable to manage state, ensuring each execution is independent
         selected_indices = set()
         self._list2_selection_mode = list2_selection_mode
         
-        # 处理结果列表
+        # Process result list
         result_list = []
         used_supplement_count = 0
         
-        # 如果是随机模式，先对可用索引进行随机打乱
+        # If random mode, shuffle available indices first
         if list2_items and list2_selection_mode == "随机":
-            # 使用当前时间的秒数+毫秒数作为随机种子
+            # Use current time seconds + milliseconds as random seed
             current_time = time.time()
             seconds = int(current_time)
             milliseconds = int((current_time - seconds) * 1000)
@@ -575,23 +575,23 @@ class StringListMerger:
             random_indices_list = None
             random_index_ptr = None
         
-        # 遍历输入1的所有行（按顺序，不循环）
+        # Iterate through all rows of input1 (in order, no looping)
         for idx1, item1 in enumerate(list1_items):
-            # 从输入2选择
+            # Select from input2
             selected_item2 = ""
             use_supplement = False
             
             if list2_items:
-                # 获取输入2中所有未选择的索引
+                # Get all unselected indices from input2
                 available_indices = [i for i in range(len(list2_items)) if i not in selected_indices]
                 
                 if available_indices:
-                    # 还有未选择的项
+                    # There are still unselected items
                     if list2_selection_mode == "顺序":
-                        # 顺序选择：选择最小的索引（从上到下）
+                        # Sequential selection: select minimum index (top to bottom)
                         selected_index2 = min(available_indices)
                     else:
-                        # 随机选择：从预先生成的随机打乱列表中选择
+                        # Random selection: select from pre-generated shuffled list
                         while random_index_ptr < len(random_indices_list):
                             candidate_index = random_indices_list[random_index_ptr]
                             if candidate_index in available_indices:
@@ -600,37 +600,37 @@ class StringListMerger:
                                 break
                             random_index_ptr += 1
                         else:
-                            # 如果随机列表用完了，回退到标准随机选择
+                            # If random list is exhausted, fall back to standard random selection
                             seed_value = int(time.time() * 1000) + idx1 + os.getpid()
                             local_random = random.Random(seed_value)
                             selected_index2 = local_random.choice(available_indices)
                     
-                    # 标记为已选择（使用局部变量）
+                    # Mark as selected (using local variable)
                     selected_indices.add(selected_index2)
                     selected_item2 = list2_items[selected_index2]
                 else:
-                    # 输入2所有项都已选择过，检查是否需要使用补充文本
-                    # 只有当输入2列表项小于输入1时才使用补充文本
+                    # All items in input2 have been selected, check if supplement text is needed
+                    # Only use supplement text when input2 list items are fewer than input1
                     if len(list2_items) < len(list1_items) and supplement_text:
                         use_supplement = True
                         used_supplement_count += 1
                         selected_item2 = supplement_text.strip()
             else:
-                # 输入2为空，如果提供了补充文本则使用
+                # Input2 is empty, use supplement text if provided
                 if supplement_text:
                     selected_item2 = supplement_text.strip()
             
-            # 合并两个选中的项
+            # Merge the two selected items
             if selected_item2 is None:
                 selected_item2 = ""
             
             merged = f"{item1}{selected_item2}"
             result_list.append(merged)
         
-        # 将所有结果用换行符连接，返回字符串列表
+        # Join all results with newlines, return string list
         merged_text_list = "\n".join(result_list)
         
-        # 构建显示信息
+        # Build display info
         display_info = []
         display_info.append(f"输入1: 共 {len(list1_items)} 项（已全部处理）")
         
@@ -651,7 +651,7 @@ class StringListMerger:
         
         display_info.append(f"输出: {len(result_list)} 个组合结果")
         
-        # 更新实例变量用于后续可能的查询
+        # Update instance variable for potential future queries
         self._list2_selected_indices = selected_indices
         
         return {"ui": {"text": display_info}, "result": (merged_text_list,)}
@@ -659,53 +659,115 @@ class StringListMerger:
     @staticmethod
     def _normalize_input(input_value):
         """
-        标准化输入值，支持多种输入格式（字符串、列表、元组、None等）
-        统一转换为"一行一个"的字符串格式（用换行符分隔）
+        Normalize input value, supporting multiple input formats (string, list, tuple, None, etc.)
+        Convert uniformly to "one item per line" string format (separated by newlines)
         """
-        # 处理 None
+        # Handle None
         if input_value is None:
             return ""
         
-        # 处理列表或元组类型（优先处理，因为可能来自外部节点如Switch(any)）
+        # Handle list or tuple types (prioritized, as they may come from external nodes like Switch(any))
         if isinstance(input_value, (list, tuple)):
-            # 如果是空列表/元组
+            # If empty list/tuple
             if len(input_value) == 0:
                 return ""
             
-            # 如果是单元素元组或列表
+            # If single-element tuple or list
             if len(input_value) == 1:
                 single_item = input_value[0]
-                # 如果单个元素是字符串，需要检查是否已经包含换行符
+                # If single element is a string, check if it already contains newlines
                 if isinstance(single_item, str):
-                    # 如果字符串包含换行符，说明已经是多行格式，直接返回
+                    # If string contains newlines, it's already in multi-line format, return directly
                     if "\n" in single_item:
                         return single_item
-                    # 否则只是一个单行字符串，直接返回
+                    # Otherwise it's just a single-line string, return directly
                     return single_item
-                # 如果单个元素不是字符串，转换为字符串
+                # If single element is not a string, convert to string
                 return str(single_item)
             
-            # 多元素列表/元组：将每个元素转换为字符串，用换行符连接
-            # 这样确保每个元素占一行，不管元素本身是什么类型
+            # Multi-element list/tuple: convert each element to string, join with newlines
+            # This ensures each element occupies one line, regardless of element type
             normalized_items = []
             for item in input_value:
                 if item is not None:
-                    # 如果元素是字符串且包含换行符，先分割再添加
+                    # If element is a string and contains newlines, split first then add
                     if isinstance(item, str) and "\n" in item:
-                        # 如果元素本身是多行字符串，分割后逐行添加
+                        # If element itself is a multi-line string, split and add line by line
                         normalized_items.extend(item.strip().split("\n"))
                     else:
-                        # 否则直接转换为字符串并添加
+                        # Otherwise convert to string directly and add
                         normalized_items.append(str(item).strip())
             return "\n".join(normalized_items)
         
-        # 处理字符串类型
+        # Handle string type
         if isinstance(input_value, str):
-            # 字符串可能已经包含换行符（来自文本框），直接返回
+            # String may already contain newlines (from text box), return directly
             return input_value
         
-        # 其他类型：转换为字符串
+        # Other types: convert to string
         return str(input_value) if input_value is not None else ""
+
+
+class StringToStringList:
+    """Convert a string to a list of strings by splitting with a delimiter (inverse operation of StringListToString).
+    Output is a list format that triggers multiple executions, similar to Switch(Any) output.
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "text": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
+                "delimiter": ("STRING", {"default": "\\n", "multiline": False, "placeholder": "分隔符（默认：\\n 表示换行符）"}),
+                "remove_empty": ("BOOLEAN", {"default": True, "label_on": "是", "label_off": "否"}),
+                "strip_items": ("BOOLEAN", {"default": True, "label_on": "是", "label_off": "否"}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("string_list",)
+    OUTPUT_IS_LIST = (True,)
+    FUNCTION = "split"
+    CATEGORY = "MechBabyUtils/Text"
+
+    def split(self, text: str, delimiter: str, remove_empty: bool, strip_items: bool):
+        """
+        Split a string into a list of strings using a delimiter.
+        
+        Args:
+            text: Input string
+            delimiter: Delimiter string ("\\n" will be converted to actual newline character)
+            remove_empty: Whether to remove empty items
+            strip_items: Whether to strip whitespace from each item
+        
+        Returns:
+            List of strings (list format, downstream nodes will execute once for each string)
+        """
+        if not text:
+            return ([],)
+        
+        # Convert \\n to actual newline character
+        if delimiter == "\\n":
+            delimiter = "\n"
+        
+        # Split string by delimiter
+        items = text.split(delimiter)
+        
+        # Process each item
+        processed_items = []
+        for item in items:
+            # Strip whitespace if needed
+            if strip_items:
+                item = item.strip()
+            
+            # Skip empty strings if needed
+            if remove_empty and not item:
+                continue
+            
+            processed_items.append(item)
+        
+        # Return list of strings (list format, downstream nodes will execute once for each string)
+        return (processed_items,)
 
 
 NODE_CLASS_MAPPINGS = {
@@ -713,6 +775,7 @@ NODE_CLASS_MAPPINGS = {
     "MechBabyAudioCollector": MechBabyAudioCollector,
     "SimpAiMetadataReader": SimpAiMetadataReader,
     "StringListMerger": StringListMerger,
+    "StringToStringList": StringToStringList,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -720,5 +783,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "MechBabyAudioCollector": "IndexTTS 音频收集器",
     "SimpAiMetadataReader": "SimpAi 元数据读取",
     "StringListMerger": "文本列表合并器",
+    "StringToStringList": "字符串转字符串列表",
 }
 
