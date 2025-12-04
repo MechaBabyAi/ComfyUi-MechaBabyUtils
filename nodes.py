@@ -695,12 +695,39 @@ class StringToStringList:
         return (processed_items,)
 
 
+class ConditionalModelSelector:
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model1": ("MODEL",),
+                "model2": ("MODEL",),
+                "input_value": ("INT", {"default": 0, "min": -2147483648, "max": 2147483647}),
+                "match_value": ("INT", {"default": 0, "min": -2147483648, "max": 2147483647}),
+            }
+        }
+    
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "select_model"
+    CATEGORY = "MechBabyUtils/Model"
+    
+    def select_model(self, model1, model2, input_value: int, match_value: int):
+        if input_value == match_value:
+            selected_model = model1
+        else:
+            selected_model = model2
+        
+        return (selected_model,)
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "MechBabyAudioCollector": MechBabyAudioCollector,
     "SimpAiMetadataReader": SimpAiMetadataReader,
     "StringListMerger": StringListMerger,
     "StringToStringList": StringToStringList,
+    "ConditionalModelSelector": ConditionalModelSelector,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -709,4 +736,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SimpAiMetadataReader": "SimpAi 元数据读取",
     "StringListMerger": "文本列表合并器",
     "StringToStringList": "字符串转字符串列表",
+    "ConditionalModelSelector": "条件模型选择器",
 }
