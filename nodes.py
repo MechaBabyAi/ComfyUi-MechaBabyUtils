@@ -10,6 +10,13 @@ import torch
 import torchaudio
 from PIL import Image
 
+try:
+    from comfy_execution.graph_utils import ExecutionBlocker
+    EXECUTION_BLOCKER_AVAILABLE = True
+except ImportError:
+    EXECUTION_BLOCKER_AVAILABLE = False
+    ExecutionBlocker = None
+
 
 class AnyType(str):
     """A special class that is always equal in not equal comparisons."""
@@ -759,6 +766,44 @@ class BypassSwitch:
         return (output, enabled)
 
 
+class OutputPathSelector:
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "enabled": ("BOOLEAN", {"default": True, "label_on": "输出到路径1", "label_off": "输出到路径2"}),
+            },
+            "optional": {
+                "input": (any_type, {"forceInput": True}),
+            }
+        }
+    
+    RETURN_TYPES = (any_type, any_type)
+    RETURN_NAMES = ("output1", "output2")
+    FUNCTION = "select_path"
+    CATEGORY = "MechBabyUtils/Control"
+    OUTPUT_NODE = True
+    
+    def select_path(self, enabled: bool, input=None):
+        if EXECUTION_BLOCKER_AVAILABLE:
+            if enabled:
+                output1 = input
+                output2 = ExecutionBlocker(None)
+            else:
+                output1 = ExecutionBlocker(None)
+                output2 = input
+        else:
+            if enabled:
+                output1 = input
+                output2 = None
+            else:
+                output1 = None
+                output2 = input
+        
+        return (output1, output2)
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "MechBabyAudioCollector": MechBabyAudioCollector,
@@ -767,6 +812,7 @@ NODE_CLASS_MAPPINGS = {
     "StringToStringList": StringToStringList,
     "ConditionalModelSelector": ConditionalModelSelector,
     "BypassSwitch": BypassSwitch,
+    "OutputPathSelector": OutputPathSelector,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -777,4 +823,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StringToStringList": "字符串转字符串列表",
     "ConditionalModelSelector": "条件模型选择器",
     "BypassSwitch": "绕过开关",
+    "OutputPathSelector": "输出路径选择器",
 }
