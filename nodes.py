@@ -11,6 +11,15 @@ import torchaudio
 from PIL import Image
 
 
+class AnyType(str):
+    """A special class that is always equal in not equal comparisons."""
+    def __ne__(self, __value: object) -> bool:
+        return False
+
+
+any_type = AnyType("*")
+
+
 class StringLineCounter:
 
     @classmethod
@@ -721,6 +730,35 @@ class ConditionalModelSelector:
         return (selected_model,)
 
 
+class BypassSwitch:
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "enabled": ("BOOLEAN", {"default": True, "label_on": "启用", "label_off": "绕过"}),
+            },
+            "optional": {
+                "input1": (any_type, {"forceInput": True}),
+                "input2": (any_type, {"forceInput": True}),
+            }
+        }
+    
+    RETURN_TYPES = (any_type, "BOOLEAN")
+    RETURN_NAMES = ("output", "switch_value")
+    FUNCTION = "bypass"
+    CATEGORY = "MechBabyUtils/Control"
+    OUTPUT_NODE = True
+    
+    def bypass(self, enabled: bool, input1=None, input2=None):
+        if enabled:
+            output = input1
+        else:
+            output = input2
+        
+        return (output, enabled)
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "MechBabyAudioCollector": MechBabyAudioCollector,
@@ -728,6 +766,7 @@ NODE_CLASS_MAPPINGS = {
     "StringListMerger": StringListMerger,
     "StringToStringList": StringToStringList,
     "ConditionalModelSelector": ConditionalModelSelector,
+    "BypassSwitch": BypassSwitch,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -737,4 +776,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StringListMerger": "文本列表合并器",
     "StringToStringList": "字符串转字符串列表",
     "ConditionalModelSelector": "条件模型选择器",
+    "BypassSwitch": "绕过开关",
 }
