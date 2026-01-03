@@ -804,6 +804,87 @@ class OutputPathSelector:
         return (output1, output2)
 
 
+class OutputPathSelectorAdvanced:
+    """增强版输出路径选择器，支持从16个输出端口中选择一个输出数据"""
+    
+    MAX_OUTPUTS = 16
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "selected_port": ("INT", {"default": 1, "min": 1, "max": cls.MAX_OUTPUTS, "step": 1, "display": "number"}),
+                "block_if_none": ("BOOLEAN", {"default": False, "label_on": "开启", "label_off": "关闭"}),
+            },
+            "optional": {
+                "input": (any_type, {"forceInput": True}),
+                "selected_port_input": ("INT", {"default": 1, "min": 1, "max": cls.MAX_OUTPUTS, "step": 1, "forceInput": True, "display": "number"}),
+            }
+        }
+    
+    RETURN_TYPES = (any_type, any_type, any_type, any_type, any_type, any_type, any_type, any_type,
+                    any_type, any_type, any_type, any_type, any_type, any_type, any_type, any_type, "INT")
+    RETURN_NAMES = ("output1", "output2", "output3", "output4", "output5", "output6", "output7", "output8",
+                    "output9", "output10", "output11", "output12", "output13", "output14", "output15", "output16", "selected_port_number")
+    FUNCTION = "select_path_advanced"
+    CATEGORY = "MechBabyUtils/Control"
+    OUTPUT_NODE = True
+    
+    def select_path_advanced(self, selected_port: int, block_if_none: bool, input=None, selected_port_input: int = None):
+        """
+        根据选择的端口编号，激活对应端口输出数据，其他端口阻止执行
+        
+        Args:
+            selected_port: 手动输入的输出端口编号（1-16）
+            block_if_none: 如果输入为 None 时是否阻止执行（默认：False，输出 None）
+            input: 输入数据（任意类型）
+            selected_port_input: 连接的输出端口编号输入（可选，如果提供则优先使用此值）
+        """
+        # 确定实际使用的端口编号（优先使用连接输入，否则使用手动输入）
+        if selected_port_input is not None and selected_port_input >= 1:
+            actual_selected_port = selected_port_input
+        else:
+            actual_selected_port = selected_port
+        
+        # 确保选择的端口编号在有效范围内
+        actual_selected_port = max(1, min(actual_selected_port, self.MAX_OUTPUTS))
+        
+        # 如果输入为 None 且 block_if_none 为 True，所有端口都阻止执行
+        if input is None and block_if_none:
+            if EXECUTION_BLOCKER_AVAILABLE:
+                blocker = ExecutionBlocker(None)
+                outputs = [blocker] * self.MAX_OUTPUTS
+            else:
+                outputs = [None] * self.MAX_OUTPUTS
+        else:
+            # 正常逻辑：选中的端口输出数据，其他端口阻止执行
+            outputs = []
+            
+            if EXECUTION_BLOCKER_AVAILABLE:
+                blocker = ExecutionBlocker(None)
+                for i in range(self.MAX_OUTPUTS):
+                    port_num = i + 1
+                    if port_num == actual_selected_port:
+                        # 激活的端口
+                        outputs.append(input)
+                    else:
+                        # 阻止执行的端口
+                        outputs.append(blocker)
+            else:
+                # 不支持 ExecutionBlocker 的降级方案
+                for i in range(self.MAX_OUTPUTS):
+                    port_num = i + 1
+                    if port_num == actual_selected_port:
+                        outputs.append(input)
+                    else:
+                        outputs.append(None)
+        
+        # 添加选择的端口编号作为最后一个输出
+        outputs.append(actual_selected_port)
+        
+        return tuple(outputs)
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "MechBabyAudioCollector": MechBabyAudioCollector,
@@ -813,6 +894,7 @@ NODE_CLASS_MAPPINGS = {
     "ConditionalModelSelector": ConditionalModelSelector,
     "BypassSwitch": BypassSwitch,
     "OutputPathSelector": OutputPathSelector,
+    "OutputPathSelectorAdvanced": OutputPathSelectorAdvanced,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -824,4 +906,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ConditionalModelSelector": "条件模型选择器",
     "BypassSwitch": "绕过开关",
     "OutputPathSelector": "输出路径选择器",
+    "OutputPathSelectorAdvanced": "输出路径选择器（增强版）",
 }
