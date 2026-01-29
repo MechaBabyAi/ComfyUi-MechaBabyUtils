@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import re
 import time
 from datetime import datetime
 from typing import List
@@ -711,6 +712,163 @@ class StringToStringList:
         return (processed_items,)
 
 
+class SaveText:
+    """
+    保存文本节点：将文本写入 ComfyUI 输出目录，逻辑类似「保存图像」。
+    支持多种文本格式（纯文本、文本列表）、自定义换行符、以及与保存图像一致的文件名前缀格式
+    （如 %date:yyyy-MM-dd%/Result、%year%、%month% 等）。
+    """
+
+    @staticmethod
+    def _format_date(pattern: str, dt: datetime) -> str:
+        """将 %date:yyyy-MM-dd% 中的格式串替换为实际日期。"""
+        date_formats = {
+            "d": lambda d: d.day,
+            "dd": lambda d: f"{d.day:02d}",
+            "M": lambda d: d.month,
+            "MM": lambda d: f"{d.month:02d}",
+            "h": lambda d: d.hour,
+            "hh": lambda d: f"{d.hour:02d}",
+            "m": lambda d: d.minute,
+            "mm": lambda d: f"{d.minute:02d}",
+            "s": lambda d: d.second,
+            "ss": lambda d: f"{d.second:02d}",
+            "y": lambda d: d.year,
+            "yy": lambda d: str(d.year)[-2:],
+            "yyy": lambda d: str(d.year)[-3:],
+            "yyyy": lambda d: d.year,
+        }
+        for key in sorted(date_formats.keys(), key=len, reverse=True):
+            if key in pattern:
+                pattern = pattern.replace(key, str(date_formats[key](dt)))
+        return pattern
+
+    @classmethod
+    def _expand_filename_prefix(cls, filename_prefix: str) -> str:
+        """展开文件名前缀中的 %date:...% 与 ComfyUI 内置的 %year% 等占位符。"""
+        if not isinstance(filename_prefix, str):
+            filename_prefix = "text"
+        filename_prefix = filename_prefix.strip() or "text"
+        # 先展开 %date:yyyy-MM-dd% 等
+        filename_prefix = re.sub(
+            r"%date:(.*?)%",
+            lambda m: cls._format_date(m.group(1), datetime.now()),
+            filename_prefix,
+        )
+        # ComfyUI 的 get_save_image_path 会处理 %year%、%month% 等，此处不重复实现
+        return filename_prefix
+
+    @staticmethod
+    def _decode_line_separator(sep: str) -> str:
+        """将用户输入的 \\n、\\t 等转成实际字符。"""
+        if not isinstance(sep, str) or not sep.strip():
+            return "\n"
+        try:
+            return sep.encode("utf-8").decode("unicode_escape")
+        except Exception:
+            return "\n"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "filename_prefix": (
+                    "STRING",
+                    {
+                        "default": "text",
+                        "multiline": False,
+                        "placeholder": "如: Result 或 %date:yyyy-MM-dd%/Result，支持 %year%、%month%、%day% 等",
+                    },
+                ),
+                "file_extension": (
+                    "STRING",
+                    {
+                        "default": ".txt",
+                        "multiline": False,
+                        "placeholder": ".txt / .json / .log / .csv / .md 等",
+                    },
+                ),
+            },
+            "optional": {
+                "text": (
+                    "STRING",
+                    {"default": "", "multiline": True, "placeholder": "要保存的文本（当未连接列表时使用）"},
+                ),
+                "text_list": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "multiline": True,
+                        "forceInput": True,
+                        "placeholder": "从上游列表接入时，将多项用「列表换行符」拼接后保存",
+                    },
+                ),
+                "list_line_separator": (
+                    "STRING",
+                    {
+                        "default": "\\n",
+                        "multiline": False,
+                        "placeholder": "列表项之间的分隔符，默认 \\n 表示换行",
+                    },
+                ),
+            },
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("saved_path",)
+    FUNCTION = "save_text"
+    CATEGORY = "MechBabyUtils/Text"
+    OUTPUT_NODE = True
+
+    def save_text(
+        self,
+        filename_prefix: str,
+        file_extension: str,
+        text: str = "",
+        text_list=None,
+        list_line_separator: str = "\\n",
+    ):
+        # 确定要写入的内容
+        if text_list is not None and len(text_list) > 0:
+            sep = self._decode_line_separator(list_line_separator)
+            if isinstance(text_list, (list, tuple)):
+                content = sep.join(str(item) for item in text_list)
+            else:
+                content = str(text_list)
+        else:
+            content = text if text is not None else ""
+
+        if not isinstance(content, str):
+            content = str(content)
+
+        # 文件名前缀与扩展名
+        prefix = self._expand_filename_prefix(filename_prefix)
+        ext = (file_extension or ".txt").strip()
+        if ext and not ext.startswith("."):
+            ext = "." + ext
+
+        output_dir = folder_paths.get_output_directory()
+        full_output_folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
+            prefix, output_dir, image_width=0, image_height=0
+        )
+
+        base_name = f"{filename}_{counter:05d}_"
+        file_name = base_name + ext
+        file_path = os.path.join(full_output_folder, file_name)
+
+        try:
+            os.makedirs(full_output_folder, exist_ok=True)
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            abs_path = os.path.abspath(file_path)
+        except Exception as e:
+            abs_path = ""
+            return {"ui": {"text": [f"保存失败: {e}"]}, "result": (abs_path,)}
+
+        display = f"已保存: {abs_path}"
+        return {"ui": {"text": [display]}, "result": (abs_path,)}
+
+
 class ConditionalModelSelector:
     
     @classmethod
@@ -887,6 +1045,7 @@ class OutputPathSelectorAdvanced:
 
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
+    "SaveText": SaveText,
     "MechBabyAudioCollector": MechBabyAudioCollector,
     "SimpAiMetadataReader": SimpAiMetadataReader,
     "StringListMerger": StringListMerger,
@@ -899,6 +1058,7 @@ NODE_CLASS_MAPPINGS = {
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "StringLineCounter": "字符串行数统计",
+    "SaveText": "保存文本",
     "MechBabyAudioCollector": "IndexTTS 音频收集器",
     "SimpAiMetadataReader": "SimpAi 元数据读取",
     "StringListMerger": "文本列表合并器",
