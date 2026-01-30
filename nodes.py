@@ -924,6 +924,49 @@ class BypassSwitch:
         return (output, enabled)
 
 
+class SelectByIndex:
+    """
+    按编号选择：多个同类型输入 + 一个编号，根据编号输出对应的输入；
+    支持任意类型，并输出当前使用的编号（整数）。
+    """
+
+    NUM_INPUTS = 16
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        required = {
+            "selected_index": (
+                "INT",
+                {
+                    "default": 1,
+                    "min": 1,
+                    "max": cls.NUM_INPUTS,
+                    "step": 1,
+                    "display": "number",
+                },
+            ),
+        }
+        optional = {
+            f"input_{i}": (any_type, {"forceInput": True})
+            for i in range(1, cls.NUM_INPUTS + 1)
+        }
+        return {
+            "required": required,
+            "optional": optional,
+        }
+
+    RETURN_TYPES = (any_type, "INT")
+    RETURN_NAMES = ("output", "selected_index")
+    FUNCTION = "select_by_index"
+    CATEGORY = "MechBabyUtils/Control"
+
+    def select_by_index(self, selected_index: int, **kwargs):
+        inputs = [kwargs.get(f"input_{i}") for i in range(1, self.NUM_INPUTS + 1)]
+        idx = max(1, min(int(selected_index), self.NUM_INPUTS))
+        value = inputs[idx - 1]
+        return (value, idx)
+
+
 class OutputPathSelector:
     
     @classmethod
@@ -1052,6 +1095,7 @@ NODE_CLASS_MAPPINGS = {
     "StringToStringList": StringToStringList,
     "ConditionalModelSelector": ConditionalModelSelector,
     "BypassSwitch": BypassSwitch,
+    "SelectByIndex": SelectByIndex,
     "OutputPathSelector": OutputPathSelector,
     "OutputPathSelectorAdvanced": OutputPathSelectorAdvanced,
 }
@@ -1065,6 +1109,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "StringToStringList": "字符串转字符串列表",
     "ConditionalModelSelector": "条件模型选择器",
     "BypassSwitch": "绕过开关",
+    "SelectByIndex": "按编号选择",
     "OutputPathSelector": "输出路径选择器",
     "OutputPathSelectorAdvanced": "输出路径选择器（增强版）",
 }
