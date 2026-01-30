@@ -2,6 +2,8 @@
 
 ComfyUI custom nodes collection by MechaBaby - A set of utility nodes for ComfyUI workflow enhancement.
 
+**[English](README_EN.md) | 中文**
+
 MechaBaby 的 ComfyUI 自定义节点集合。包含以下实用节点：
 
 ## 节点列表
