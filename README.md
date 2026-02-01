@@ -41,6 +41,12 @@ MechaBaby 的 ComfyUI 自定义节点集合。包含以下实用节点：
 
 ### 图像处理节点 (MechBabyUtils/Image)
 
+- **ImageResizeLongestSide（图像缩小（按最长边））**：当输入图像的最长边大于指定尺寸时，按原图比例将长边缩小至该尺寸，短边自动按比例计算；不满足条件则不缩放。
+  - 输入：image（IMAGE）
+  - 最长边尺寸（max_longest_side）：1～16384，默认 1024
+  - 缩放算法（resize_method）：Area（默认）或 Lanczos
+  - 输出：缩放后的图像（比例不变）
+
 - **SimpAiMetadataReader（SimpAi 元数据读取）**：读取 SimpAi 图片内嵌的 JSON 元数据。
 
 ### 模型处理节点 (MechBabyUtils/Model)
@@ -120,6 +126,14 @@ git clone https://github.com/MechaBabyAi/ComfyUi-MechaBabyUtils.git
 - 文件名前缀：`%date:yyyy-MM-dd%/logs`
 - 文件扩展名：`.log`
 - 结果：文件保存到按日期命名的子目录，如 `output/2025-01-29/logs_00001_.log`
+
+### ImageResizeLongestSide 使用示例
+
+- **场景**：限制图像最长边不超过 1024
+- 输入：任意尺寸图像（如 1920×1080）
+- 最长边尺寸：1024
+- 缩放算法：Area（默认）或 Lanczos
+- 结果：长边缩为 1024，短边按比例（如 1024×576）；若原图最长边已 ≤1024 则原样输出
 
 ### StringListMerger 使用示例
 

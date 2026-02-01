@@ -41,6 +41,12 @@ ComfyUI custom nodes collection by MechaBaby — a set of utility nodes for Comf
 
 ### Image (MechBabyUtils/Image)
 
+- **ImageResizeLongestSide** — Resize by longest side: when the image’s longest side exceeds the given size, scale down so the longest side equals that size (aspect ratio preserved); otherwise pass through unchanged.
+  - Input: image (IMAGE).
+  - Max longest side: 1–16384, default 1024.
+  - Resize method: Area (default) or Lanczos.
+  - Output: resized image (same aspect ratio).
+
 - **SimpAiMetadataReader** — Reads SimpAi JSON metadata embedded in images.
 
 ### Model (MechBabyUtils/Model)
@@ -106,6 +112,10 @@ Restart ComfyUI after cloning.
 - **Single text:** Set filename prefix (e.g. `Result` or `%date:yyyy-MM-dd%/Result`), extension (e.g. `.txt`), and `text`. File is written under the output directory (e.g. `output/Result_00001_.txt` or `output/2025-01-29/Result_00001_.txt`).
 - **Text list:** Wire a string list to `text_list`, set list line separator (default `\n`). Content is joined with that separator and saved.
 - **Date subfolder:** e.g. prefix `%date:yyyy-MM-dd%/logs`, extension `.log` → file under `output/2025-01-29/logs_00001_.log`.
+
+### ImageResizeLongestSide
+
+- Limit longest side to e.g. 1024. Input e.g. 1920×1080 → output 1024×576 (aspect preserved). Resize method: Area (default) or Lanczos. If longest side already ≤ 1024, image is passed through unchanged.
 
 ### StringListMerger
 

@@ -12,6 +12,11 @@ import torchaudio
 from PIL import Image
 
 try:
+    from comfy.utils import common_upscale
+except ImportError:
+    common_upscale = None
+
+try:
     from comfy_execution.graph_utils import ExecutionBlocker
     EXECUTION_BLOCKER_AVAILABLE = True
 except ImportError:
@@ -518,6 +523,51 @@ class SimpAiMetadataReader:
             return json.loads(text)
         except json.JSONDecodeError:
             return None
+
+
+class ImageResizeLongestSide:
+    """
+    图像缩小（按最长边）：当输入图像的最长边大于指定尺寸时，按原图比例将长边缩小至该尺寸，
+    短边按比例自动计算。缩放算法可选 Lanczos 或 Area，默认 Area。
+    """
+
+    RESIZE_METHODS = ["Area", "Lanczos"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "max_longest_side": (
+                    "INT",
+                    {"default": 1024, "min": 1, "max": 16384, "step": 1, "display": "number"},
+                ),
+                "resize_method": (cls.RESIZE_METHODS, {"default": "Area"}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "resize_longest_side"
+    CATEGORY = "MechBabyUtils/Image"
+
+    def resize_longest_side(self, image: torch.Tensor, max_longest_side: int, resize_method: str):
+        if common_upscale is None:
+            raise RuntimeError("comfy.utils.common_upscale is not available")
+        # image: (B, H, W, C)
+        b, h, w, c = image.shape
+        longest = max(h, w)
+        if longest <= max_longest_side:
+            return (image,)
+        scale = max_longest_side / float(longest)
+        new_w = max(1, round(w * scale))
+        new_h = max(1, round(h * scale))
+        # common_upscale expects (B, C, H, W), crop="disabled"
+        method = "area" if resize_method == "Area" else "lanczos"
+        samples = image.movedim(-1, 1)
+        out = common_upscale(samples, new_w, new_h, method, "disabled")
+        out = out.movedim(1, -1)
+        return (out,)
 
 
 class StringListMerger:
@@ -1091,6 +1141,7 @@ NODE_CLASS_MAPPINGS = {
     "SaveText": SaveText,
     "MechBabyAudioCollector": MechBabyAudioCollector,
     "SimpAiMetadataReader": SimpAiMetadataReader,
+    "ImageResizeLongestSide": ImageResizeLongestSide,
     "StringListMerger": StringListMerger,
     "StringToStringList": StringToStringList,
     "ConditionalModelSelector": ConditionalModelSelector,
@@ -1105,6 +1156,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SaveText": "保存文本",
     "MechBabyAudioCollector": "IndexTTS 音频收集器",
     "SimpAiMetadataReader": "SimpAi 元数据读取",
+    "ImageResizeLongestSide": "图像缩小（按最长边）",
     "StringListMerger": "文本列表合并器",
     "StringToStringList": "字符串转字符串列表",
     "ConditionalModelSelector": "条件模型选择器",
