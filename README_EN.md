@@ -90,6 +90,18 @@ ComfyUI custom nodes collection by MechaBaby — a set of utility nodes for Comf
   - Logic: selected port gets input; others use ExecutionBlocker.
   - Supports wired port index and optional blocking on None.
 
+- **GPUCCSelector** — Selects input by current GPU Compute Capability (CC).
+  - Inputs: 10系, 16/20系, 30系(CC8.0), 30系(CC8.6), 40系, 50系, 其它 (any type, optional).
+  - Output: the input matching current CC; cc_version outputs CC string (e.g. 8.6).
+  - Logic: auto-detects via `torch.cuda.get_device_capability()`, passes through matching input.
+  - Use case: different models/params per GPU series (e.g. INT4 on 30系+ only).
+
+- **GPUVramSelector** — Selects input by current GPU VRAM capacity.
+  - Inputs: <8G, 8G, 10G, 12G, 16G, 24G, 32G, 48G, 80G, 96G, >96G (any type, optional).
+  - Output: the input matching current VRAM tier; vram_info outputs value (e.g. 11.99 GB).
+  - Logic: auto-detects VRAM, matches by tier (e.g. 11.99G → 12G).
+  - Use case: auto-select model, resolution, or config by VRAM size.
+
 ---
 
 ## Installation
@@ -146,6 +158,14 @@ Restart ComfyUI after cloning.
 ### OutputPathSelectorAdvanced
 
 - One input, 16 ports. Set port 1–16 (or wire an INT). Only that port outputs; others blocked. Optional: block all when input is None.
+
+### GPUCCSelector
+
+- Wire different models to inputs (10系, 16/20系, 30系, 40系, etc.). Node detects CC (e.g. 8.6) and outputs the matching input. Use for series-specific configs (e.g. INT8 on 20系, INT4 on 30系+).
+
+### GPUVramSelector
+
+- Wire configs to inputs (<8G, 8G, 12G, 24G, etc.). Node detects VRAM (e.g. 11.99G → 12G) and outputs the matching input. Use for VRAM-based resolution or model selection.
 
 ---
 

@@ -1136,6 +1136,174 @@ class OutputPathSelectorAdvanced:
         return tuple(outputs)
 
 
+# ---------------------------------------------------------------------------
+# GPU CC 选择器：根据当前显卡 Compute Capability 选择对应输入并透传
+# ---------------------------------------------------------------------------
+
+# CC 到输入槽的映射：(major, minor) -> input_key
+# 参考 https://developer.nvidia.com/cuda-gpus
+_CC_TO_SLOT = {
+    (6, 0): "10系",
+    (6, 1): "10系",
+    (7, 5): "16/20系",
+    (8, 0): "30系(CC8.0)",
+    (8, 6): "30系(CC8.6)",
+    (8, 9): "40系",
+    (12, 0): "50系",
+    (12, 1): "50系",
+}
+
+# 输入名称及其 tooltip（鼠标悬停说明）
+_CC_INPUT_CONFIG = {
+    "10系": "10系 Pascal · CC 6.0/6.1 · GTX 1050/1060/1070/1080/1080 Ti",
+    "16/20系": "16/20系 Turing · CC 7.5 · GTX 1650/1650 Ti · RTX 2060/2070/2080/2080 Ti",
+    "30系(CC8.0)": "30系 Ampere(CC8.0) · A100/A30 等数据中心卡",
+    "30系(CC8.6)": "30系 Ampere(CC8.6) · RTX 3050/3060/3070/3080/3090/3090 Ti",
+    "40系": "40系 Ada Lovelace · CC 8.9 · RTX 4050/4060/4070/4080/4090",
+    "50系": "50系 Blackwell · CC 12.x · RTX 5050/5060/5070/5080/5090",
+    "其它": "其它或未知 · 不匹配以上 CC 的显卡（如 Maxwell、Volta、Jetson 等）",
+}
+
+
+class GPUCCSelector:
+    """
+    根据当前运行显卡的 Compute Capability (CC) 版本，从对应版本的输入中透传数据。
+    支持任意类型输入，左侧连接不同上游节点，节点自动检测 GPU CC 并输出匹配的输入。
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        optional = {}
+        for key, tooltip in _CC_INPUT_CONFIG.items():
+            optional[key] = (any_type, {"forceInput": True, "tooltip": tooltip})
+        return {
+            "required": {},
+            "optional": optional,
+        }
+
+    RETURN_TYPES = (any_type, "STRING")
+    RETURN_NAMES = ("output", "cc_version")
+    FUNCTION = "select_by_cc"
+    CATEGORY = "MechBabyUtils/Control"
+
+    def select_by_cc(self, **kwargs):
+        major, minor, cc_str, slot_key = self._get_current_cc()
+        value = kwargs.get(slot_key)
+        ui_text = f"CC {cc_str} → {slot_key}"
+        return {"ui": {"text": [ui_text]}, "result": (value, cc_str)}
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        return True
+
+    @classmethod
+    def _get_current_cc(cls):
+        """返回 (major, minor, cc_str, slot_key)。"""
+        if not torch.cuda.is_available():
+            return (0, 0, "无 CUDA", "其它")
+        try:
+            cap = torch.cuda.get_device_capability()
+            major, minor = int(cap[0]), int(cap[1])
+            cc_str = f"{major}.{minor}"
+            slot_key = _CC_TO_SLOT.get((major, minor), "其它")
+            return (major, minor, cc_str, slot_key)
+        except Exception:
+            return (0, 0, "未知", "其它")
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        # 每次执行都重新检测 CC（多卡环境可能变化）
+        major, minor, _, _ = cls._get_current_cc()
+        return (major, minor)
+
+
+# ---------------------------------------------------------------------------
+# 按显存容量选择：根据当前显卡 VRAM 容量选择对应输入并透传（简化版档位）
+# ---------------------------------------------------------------------------
+
+# 显存档位：(slot_key, low_gb, high_gb)，区间 [low, high)，覆盖无缺口
+_VRAM_TIERS = [
+    ("<8G", 0.0, 7.5),
+    ("8G", 7.5, 9.5),
+    ("10G", 9.5, 11.5),
+    ("12G", 11.5, 14.0),
+    ("16G", 14.0, 22.0),   # 含 20G 档
+    ("24G", 22.0, 28.0),
+    ("32G", 28.0, 40.0),
+    ("48G", 44.0, 56.0),
+    ("80G", 72.0, 88.0),
+    ("96G", 90.0, 102.0),
+    (">96G", 102.0, float("inf")),
+]
+
+_VRAM_INPUT_CONFIG = {
+    "<8G": "<8G · 显存 < 7.5 GB · 如 GTX 1050 4G、1650 4G",
+    "8G": "8G · 7.5~9.5 GB · 如 RTX 3050/4060/4070 8G",
+    "10G": "10G · 9.5~11.5 GB · 如 RTX 3080 10G",
+    "12G": "12G · 11.5~14 GB · 如 RTX 3060/3080 12G/4070 Ti",
+    "16G": "16G · 14~22 GB · 如 RTX 4080/5080、20G 卡",
+    "24G": "24G · 22~28 GB · 如 RTX 3090/4090/5090",
+    "32G": "32G · 28~40 GB · 如 RTX 6000 Ada",
+    "48G": "48G · 44~56 GB · 如 L40、A6000 48G",
+    "80G": "80G · 72~88 GB · 如 A100 80G、H100",
+    "96G": "96G · 90~102 GB · 如 H100 96G、H200",
+    ">96G": ">96G · ≥102 GB · 大显存或多卡",
+}
+
+
+class GPUVramSelector:
+    """
+    根据当前运行显卡的 VRAM 容量，从对应档位的输入中透传数据。
+    支持任意类型输入，节点自动检测显存并输出匹配档位的输入。
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        optional = {}
+        for key, tooltip in _VRAM_INPUT_CONFIG.items():
+            optional[key] = (any_type, {"forceInput": True, "tooltip": tooltip})
+        return {
+            "required": {},
+            "optional": optional,
+        }
+
+    RETURN_TYPES = (any_type, "STRING")
+    RETURN_NAMES = ("output", "vram_info")
+    FUNCTION = "select_by_vram"
+    CATEGORY = "MechBabyUtils/Control"
+
+    def select_by_vram(self, **kwargs):
+        vram_gb, vram_str, slot_key = self._get_current_vram()
+        value = kwargs.get(slot_key)
+        ui_text = f"{vram_str} → {slot_key}"
+        return {"ui": {"text": [ui_text]}, "result": (value, vram_str)}
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        return True
+
+    @classmethod
+    def _get_current_vram(cls):
+        """返回 (vram_gb, vram_str, slot_key)。"""
+        if not torch.cuda.is_available():
+            return (0.0, "无 CUDA", "<8G")
+        try:
+            total_bytes = torch.cuda.get_device_properties(0).total_memory
+            vram_gb = total_bytes / (1024.0 ** 3)
+            vram_str = f"{vram_gb:.2f} GB"
+            for slot_key, low, high in _VRAM_TIERS:
+                if low <= vram_gb < high:
+                    return (vram_gb, vram_str, slot_key)
+            return (vram_gb, vram_str, ">96G")
+        except Exception:
+            return (0.0, "未知", "<8G")
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        vram_gb, _, _ = cls._get_current_vram()
+        return (vram_gb,)
+
+
 NODE_CLASS_MAPPINGS = {
     "StringLineCounter": StringLineCounter,
     "SaveText": SaveText,
@@ -1149,6 +1317,8 @@ NODE_CLASS_MAPPINGS = {
     "SelectByIndex": SelectByIndex,
     "OutputPathSelector": OutputPathSelector,
     "OutputPathSelectorAdvanced": OutputPathSelectorAdvanced,
+    "GPUCCSelector": GPUCCSelector,
+    "GPUVramSelector": GPUVramSelector,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -1164,4 +1334,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SelectByIndex": "按编号选择",
     "OutputPathSelector": "输出路径选择器",
     "OutputPathSelectorAdvanced": "输出路径选择器（增强版）",
+    "GPUCCSelector": "按显卡CC选择",
+    "GPUVramSelector": "按显存容量选择",
 }
